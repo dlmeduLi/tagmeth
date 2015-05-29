@@ -6,7 +6,16 @@ import re
 import os
 import os.path
 import optparse
+import sys
 import pysam
+
+# global regular expressions
+
+readKeyRe = re.compile('(.*)\s[1-2](.*)')
+readNumRe = re.compile('.*\s([1-2]).*')
+cgPosRe = re.compile('(CG)')
+tagCTRe = re.compile('F1/CT')
+tagGARe = re.compile('F1/GA')
 
 # sort bam file with pysam.sort function
 # the bam file should be sorted by qname
@@ -14,17 +23,170 @@ import pysam
 def SortSam(inBam, outBam):
 	pysam.sort("-n", inBam, outBam)
 
+def TrimReadSeq(seq, cigar):
+	trimedSeq = ''
+	pos = 0
+	for m in cigar :
+		if(m[0] == 0) : # M
+			trimedSeq += seq[pos : pos + m[1]]
+			pos += m[1]
+		elif(m[0] == 1): # I
+			pos += m[1]
+		elif(m[0] == 2): # D
+			trimedSeq += ('N' * m[1])
+		elif(m[0] == 3): # N
+			trimedSeq += ('N' * m[1])
+		elif(m[0] == 4): # S
+			pos += m[1]
+	return trimedSeq
+
+def FormatPosList(posList):
+	if(len(posList) == 0):
+		return 'NA'
+	return ','.join(map(str, posList))
+
+def WriteTagMeth(tag, tagType, cvt, chrname, pos, tagLen, meth, unmeth, undt, outFile):
+	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s\n' % (tag, tagType, cvt, 
+		chrname, pos, tagLen,
+		FormatPosList(meth), 
+		FormatPosList(unmeth), 
+		FormatPosList(undt)))
+
 # get tagmeth of single read
 
-def TagMethOfSingleRead(read):
+def TagMethOfSingleReads(dictSingle, dictRefSeq, bamFile, outFile):
 
-	return (pos, len, meth, unmeth, undt)
+	for read in dictSingle.itervalues():
+		readSeq = TrimReadSeq(read.seq, read.cigar)
+		tagLen = len(readSeq)
+		readPos = read.pos
+		tag = read.qname
+		chrname = bamFile.getrname(read.rname)
+
+		# get the corresponding part of reference sequence
+
+		if(not (chrname in dictRefSeq)):
+			print('\nerror: chrom "' + chrname + '" was not found in the reference sequences')
+			sys.exit(-1)
+		refSeq = dictRefSeq[chrname][readPos : readPos + tagLen]
+
+		# CG positions on reference sequence
+
+		cgPos = [ m.start() for m in cgPosRe.finditer(refSeq) ]
+
+		# check CG methylation
+
+		cvtCT = False
+		cvtGA = False
+		if(not read.has_tag('XB')):
+			return
+		tagXB = read.get_tag('XB')
+		if(tagCTRe.match(tagXB)):
+			cvtCT = True
+			cvt = 'CT'
+		elif(tagGARe.match(tagXB)):
+			cvtGA = True
+			cvt = 'GA'
+		else:
+			return
+
+		meth = []
+		unmeth = []
+		undt = []
+		
+		if(cvtCT):
+			for pos in cgPos :
+				readBase = readSeq[pos]
+				if (readBase == 'C'):
+					meth += [ pos ]
+				elif (readBase == 'T'):
+					unmeth += [ pos ]
+				else:
+					undt += [ pos ]
+		elif(cvtGA):
+			for pos in cgPos :
+				readBase = readSeq[pos + 1]
+				if (readBase == 'G'):
+					meth += [ pos ]
+				elif (readBase == 'A'):
+					unmeth += [ pos ]
+				else:
+					undt += [ pos ]
+
+		if(not (len(meth) <= 0 and len(unmeth) <= 0 and len(undt) <= 0)):
+			WriteTagMeth(tag, 'S', cvt, chrname, readPos, tagLen, meth, unmeth, undt, outFile)
+	
 
 # get tagmeth of paired read
 
-def TagMethOfPairedReads(read1, read2):
+def TagMethOfPairedReads(dictPaired, dictRefSeq, bamFile, outFile):
+	for pair in dictPaired.itervalues():
+		if(not (pair[0] and pair[1])):
+			return	
 
-	return (pos, len, meth, unmeth, undt)
+		chrname = bamFile.getrname(pair[0].rname)
+		if(not (chrname in dictRefSeq)):
+			print('\nerror: chrom "' + chrname + '" was not found in the reference sequences')
+			sys.exit(-1)
+		
+		readSeq1 = TrimReadSeq(pair[0].seq, pair[0].cigar)
+		readSeq2 = TrimReadSeq(pair[1].seq, pair[1].cigar)
+		readSeqLen1 = len(readSeq1)
+		readSeqLen2 = len(readSeq2)
+ 
+		tagPos = pair[0].pos
+		tagLen = pair[1].pos + readSeqLen2 - tagPos
+		refSeq = dictRefSeq[chrname][tagPos : tagPos + tagLen]
+		if(tagLen >= readSeqLen1 + readSeqLen2):
+			tagSeq = readSeq1 + 'N' * (pair[1].pos - pair[0].pos - readSeqLen1) + readSeq2
+		elif(tagLen > readSeqLen1 and tagLen < (readSeqLen1 + readSeqLen2)):
+			tagSeq = readSeq1 + readSeq2[readSeqLen1 + readSeqLen2 - tagLen : ]
+		else:
+			tagSeq = readSeq1[:tagLen]
+
+		cgPos = [ m.start() for m in cgPosRe.finditer(refSeq) ]		
+		
+		if(not (pair[0].has_tag('XB') and pair[1].has_tag('XB'))):
+			return
+		if(not (pair[0].get_tag('XB') == pair[1].get_tag('XB'))):
+			return
+		tagXB = pair[0].get_tag('XB')
+
+		cvtCT = False
+		cvtGA = False
+		if(tagCTRe.match(tagXB)):
+			cvtCT = True
+			cvt = 'CT'
+		elif(tagGARe.match(tagXB)):
+			cvtGA = True
+			cvt = 'GA'
+		else:
+			return
+
+		meth = []
+		unmeth = []
+		undt = []
+		if(cvtCT):
+			for pos in cgPos :
+				readBase = tagSeq[pos]
+				if (readBase == 'C'):
+					meth += [ pos ]
+				elif (readBase == 'T'):
+					unmeth += [ pos ]
+				else:
+					undt += [ pos ]
+		elif(cvtGA):
+			for pos in cgPos :
+				readBase = tagSeq[pos + 1]
+				if (readBase == 'G'):
+					meth += [ pos ]
+				elif (readBase == 'A'):
+					unmeth += [ pos ]
+				else:
+					undt += [ pos ]
+
+		if(not (len(meth) <= 0 and len(unmeth) <= 0 and len(undt) <= 0)):
+			WriteTagMeth(pair[0].qname, 'P', cvt, chrname, tagPos, tagLen, meth, unmeth, undt, outFile)
 
 def main():
 
@@ -46,7 +208,7 @@ def main():
 	inputBamFileName = args[0]
 	refSeqFileName = args[1]
 	bamFileName = inputBamFileName
-	baseFileName = os.path.splitext(os.path.basename(inputBamFileName))
+	baseFileName = os.path.splitext(os.path.basename(inputBamFileName))[0]
 	outputFileName =  baseFileName + '.tagmeth.csv'
 	logFileName = baseFileName + '.log'
 
@@ -55,8 +217,9 @@ def main():
 	rmTemp = False
 	if(options.sort):
 		print('[*] Sorting by QNAME...')
-		bamFileName = 'sorted.' + os.path.basename(inputBamFileName)
-		SortBam(inputBamFileName, bamFileName)
+		bamFileName = 'sorted.' + baseFileName
+		SortSam(inputBamFileName, bamFileName)
+		bamFileName += '.bam'
 		rmTemp = True
 
 	# load input files
@@ -72,7 +235,7 @@ def main():
 		print('error: Reference sequence file "', refSeqFileName, '"', ' doest not exist.')
 		sys.exit(-1)
 
-	refSeq = {}
+	dictRefSeq = {}
 	with open(refSeqFileName, 'r') as refSeqFile :
 		chrname = ''
 		seq = ''
@@ -82,14 +245,20 @@ def main():
 				# save current seq for current chr
 
 				if(chrname != ''):
-					refSeq[chrname] = seq
+					dictRefSeq[chrname] = seq
 				
 				# new chrname & seq
 
 				chrname = line[1:].strip()
 				seq = ''
+				print('    loading reference sequence: ' + chrname)
 			else:
 				seq += line.strip().upper()
+		
+		# write the last chr
+
+		if(chrname != ''):
+			dictRefSeq[chrname] = seq
 	refSeqFile.close()
 
 	# prepare output files
@@ -99,53 +268,72 @@ def main():
 	try:
 		outFile = open(outputFileName, 'w')
 	except IOError:
-		print('error: Write to output file failed!')
+		print('error: write to output file failed!')
 		sys.exit(-1)
+	outFile.write('tagname\ttype\tcvt\tchr\tpos\tlen\tmethylated\tunmethylated\tundetermined\n')
 
 	# analyse algnments
 
 	print('[*] Analyzing...')
 	
-	dictUnpaired = {}
+	dictSingle = {}
+	dictPaired = {}
+	currentGroupKey = ''
 	readCount = 0
-	for read in bamFile.fetch():
-		pairKey = ''.join(pairKeyRe.findall(read.qname)[0])
-		chrname = bamFile.getrname(read.rname)
+	for read in bamFile.fetch(until_eof = True):
+		groupKey = ''.join(readKeyRe.findall(read.qname)[0])
+		if(groupKey != currentGroupKey):
+			currentGroupKey = groupKey
+
+			# handle and write results
+
+			TagMethOfPairedReads(dictPaired, dictRefSeq, bamFile, outFile)
+			TagMethOfSingleReads(dictSingle, dictRefSeq, bamFile, outFile)
+			dictPaired.clear()
+			dictSingle.clear()
 
 		# check if it is properly paired
 
 		if(read.is_proper_pair):
 
-			if(pairKey in dictUnpaired):
-				
-				# find paired read, handle paired reads
+			# paired reads
 
-				tagmeth = TagMethOfPairedReads(read, dictUnpaired[pairKey])
-				dictUnpaired.pop(pairKey, None)
-
+			chrpos = bamFile.getrname(read.rname).strip() + str(read.pos)
+			chrposNext = bamFile.getrname(read.rnext).strip() + str(read.pnext)
+			if(chrpos < chrposNext):
+				readKey = groupKey + ':' + chrpos + ':' + chrposNext
 			else:
+				readKey = groupKey + ':' + chrposNext + ':' + chrpos
 
-				# not paired yet
-
-				dictUnpaired[pairKey] = read
-				tagmeth = None
+			readType = -1
+			if(read.is_read1):
+				readType = 0
+			elif(read.is_read2):
+				readType = 1
+			
+			if(readType == 0 or readType == 1):
+				if(readKey in dictPaired):
+					dictPaired[readKey][readType] = read
+				else:
+					dictPaired[readKey] = [None, None]
+					dictPaired[readKey][readType] = read
 		else:
 
-			# handle single read
+			# single read
 
-			tagmeth = TagMethOfSingleRead(read)
-
-		if(tagmeth):
-			outFile.write("%s\t%s\t%ld\t%d\t%s\t%s\t%s\n" % (
-				pairKey, chrname, 
-				tagmeth[0], tagmeth[1],
-				tagmeth[2], tagmeth[3], tagmeth[4]))
+			readKey = groupKey + ':' + readNumRe.findall(read.qname)[0]
+			dictSingle[readKey] = read
 
 		# progress
 
 		readCount += 1
 		sys.stdout.write('\r    read: #%ld' % (readCount))
 		sys.stdout.flush()
+
+	TagMethOfPairedReads(dictPaired, dictRefSeq, bamFile, outFile)
+	TagMethOfSingleReads(dictSingle, dictRefSeq, bamFile, outFile)
+		
+	sys.stdout.write('\n')
 	
 	# release resources
 

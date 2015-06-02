@@ -305,11 +305,10 @@ def main():
 			else:
 				readKey = groupKey + ':' + chrposNext + ':' + chrpos
 
-			readType = -1
-			if(read.is_read1):
-				readType = 0
-			elif(read.is_read2):
+			if(read.is_reverse):
 				readType = 1
+			else:
+				readType = 0
 			
 			if(readType == 0 or readType == 1):
 				if(readKey in dictPaired):

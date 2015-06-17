@@ -46,11 +46,12 @@ def FormatPosList(posList):
 	return ','.join(map(str, posList))
 
 def WriteTagMeth(tag, tagType, cvt, chrname, pos, tagLen, meth, unmeth, undt, outFile):
-	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s\n' % (tag, tagType, cvt, 
+	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s%d\t%d\t%d\n' % (tag, tagType, cvt, 
 		chrname, pos, tagLen,
 		FormatPosList(meth), 
 		FormatPosList(unmeth), 
-		FormatPosList(undt)))
+		FormatPosList(undt),
+		len(meth), len(unmeth), len(undt)))
 
 # get tagmeth of single read
 
@@ -270,7 +271,7 @@ def main():
 	except IOError:
 		print('error: write to output file failed!')
 		sys.exit(-1)
-	outFile.write('tagname\ttype\tcvt\tchr\tpos\tlen\tmethylated\tunmethylated\tundetermined\n')
+	outFile.write('tagname\ttype\tcvt\tchr\tpos\tlen\tmethylated\tunmethylated\tundetermined\tmethycount\tunmethycount\tundtcount\n')
 
 	# analyse algnments
 

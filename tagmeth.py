@@ -282,7 +282,11 @@ def main():
 	currentGroupKey = ''
 	readCount = 0
 	for read in bamFile.fetch(until_eof = True):
-		groupKey = ''.join(readKeyRe.findall(read.qname)[0])
+		try:
+			groupKey = ''.join(readKeyRe.findall(read.qname)[0])
+		except:
+			groupKey = read.qname
+
 		if(groupKey != currentGroupKey):
 			currentGroupKey = groupKey
 
@@ -321,7 +325,10 @@ def main():
 
 			# single read
 
-			readKey = groupKey + ':' + readNumRe.findall(read.qname)[0]
+			try:
+				readKey = groupKey + ':' + readNumRe.findall(read.qname)
+			except:
+				readKey = groupKey
 			dictSingle[readKey] = read
 
 		# progress

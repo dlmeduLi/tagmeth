@@ -46,7 +46,7 @@ def FormatPosList(posList):
 	return ','.join(map(str, posList))
 
 def WriteTagMeth(tag, tagType, cvt, chrname, pos, tagLen, meth, unmeth, undt, outFile):
-	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s%d\t%d\t%d\n' % (tag, tagType, cvt, 
+	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s\t%d\t%d\t%d\n' % (tag, tagType, cvt, 
 		chrname, pos, tagLen,
 		FormatPosList(meth), 
 		FormatPosList(unmeth), 

@@ -211,7 +211,7 @@ def main():
 	bamFileName = inputBamFileName
 	baseFileName = os.path.splitext(os.path.basename(inputBamFileName))[0]
 	outputFileName =  baseFileName + '.tagmeth.csv'
-	logFileName = baseFileName + '.log'
+	logFileName = baseFileName + '.tagmeth.log'
 
 	# sort the input bam file if -s option is set
 

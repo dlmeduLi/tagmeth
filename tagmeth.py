@@ -48,7 +48,7 @@ def FormatPosList(posList):
 def WriteTagMeth(tag, tagType, cvt, chrname, pos, tagLen, meth, unmeth, undt, outFile):
 	outFile.write('%s\t%s\t%s\t%s\t%15ld\t%6d\t%s\t%s\t%s\t%d\t%d\t%d\n' % (tag, tagType, cvt, 
 		chrname, pos, tagLen,
-		FormatPosList(meth), 
+		FormatPosList(meth),
 		FormatPosList(unmeth), 
 		FormatPosList(undt),
 		len(meth), len(unmeth), len(undt)))
@@ -115,7 +115,7 @@ def TagMethOfSingleReads(dictSingle, dictRefSeq, bamFile, outFile):
 					undt += [ pos ]
 
 		if(not (len(meth) <= 0 and len(unmeth) <= 0 and len(undt) <= 0)):
-			WriteTagMeth(tag, 'S', cvt, chrname, readPos, tagLen, meth, unmeth, undt, outFile)
+			WriteTagMeth(tag.split()[0], 'S', cvt, chrname, readPos, tagLen, meth, unmeth, undt, outFile)
 	
 
 # get tagmeth of paired read
@@ -187,7 +187,7 @@ def TagMethOfPairedReads(dictPaired, dictRefSeq, bamFile, outFile):
 					undt += [ pos ]
 
 		if(not (len(meth) <= 0 and len(unmeth) <= 0 and len(undt) <= 0)):
-			WriteTagMeth(pair[0].qname, 'P', cvt, chrname, tagPos, tagLen, meth, unmeth, undt, outFile)
+			WriteTagMeth(pair[0].qname.split()[0], 'P', cvt, chrname, tagPos, tagLen, meth, unmeth, undt, outFile)
 
 def main():
 

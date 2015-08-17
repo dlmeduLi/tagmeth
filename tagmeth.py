@@ -22,7 +22,7 @@ tagGARe = re.compile('F1/GA')
 
 def SortSam(inBam, outBam):
 	pysam.sort("-n", inBam, outBam)
-
+˚
 def TrimReadSeq(seq, cigar):
 	trimedSeq = ''
 	pos = 0
@@ -127,8 +127,8 @@ def TagMethOfPairedReads(dictPaired, dictRefSeq, bamFile, outFile):
 
 		chrname = bamFile.getrname(pair[0].rname)
 		if(not (chrname in dictRefSeq)):
-			print('\nerror: chrom "' + chrname + '" was not found in the reference sequences')
-			sys.exit(-1)
+			print('\nwarning: chrom "' + chrname + '" was not found in the reference sequences')
+			pass
 		
 		readSeq1 = TrimReadSeq(pair[0].seq, pair[0].cigar)
 		readSeq2 = TrimReadSeq(pair[1].seq, pair[1].cigar)

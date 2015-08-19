@@ -22,7 +22,7 @@ tagGARe = re.compile('F1/GA')
 
 def SortSam(inBam, outBam):
 	pysam.sort("-n", inBam, outBam)
-˚
+
 def TrimReadSeq(seq, cigar):
 	trimedSeq = ''
 	pos = 0
@@ -67,8 +67,8 @@ def TagMethOfSingleReads(dictSingle, dictRefSeq, bamFile, outFile):
 		# get the corresponding part of reference sequence
 
 		if(not (chrname in dictRefSeq)):
-			print('\nerror: chrom "' + chrname + '" was not found in the reference sequences')
-			sys.exit(-1)
+			print('\nwarning: chrom "' + chrname + '" was not found in the reference sequences')
+			pass
 		refSeq = dictRefSeq[chrname][readPos : readPos + tagLen]
 
 		# CG positions on reference sequence
